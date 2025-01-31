@@ -1,0 +1,68 @@
+import numpy as np
+import sympy as sp
+import time
+
+# объявляем символьные переменные
+alpha_1 = sp.Symbol('alpha_1')
+alpha_2 = sp.Symbol('alpha_2')
+alpha_3 = sp.Symbol('alpha_3')
+
+alpha = (alpha_1, alpha_2, alpha_3)
+
+# задаём символьное выражение функции
+sym_func = (1.5 - alpha_1 * (1 - alpha_2)) ** 2 + (2.25 - alpha_1 * (1 - alpha_2 ** 2)) ** 2 - alpha_3 ** 3
+# конвертация символьного выражения целевой функции из SymPy в функцию Python (в имена числовой библиотеки numpy)
+func = sp.lambdify((alpha_1, alpha_2, alpha_3), sym_func, 'numpy')
+# создаём список частных производных 1-го порядка
+deriv_list = [sym_func.diff(var) for var in alpha]
+# конвертация символьного выражения функций частных производных целевой функции из SymPy в функцию Python
+deriv_funcs = [sp.lambdify((alpha_1, alpha_2, alpha_3), deriv, 'numpy') for deriv in deriv_list]
+
+# задаём диапазоны изменения переменных функции
+limits = np.array(
+        [
+            [0.38, 1.77],
+            [1.3, 5.7],
+            [0.8, 2.1]
+            ]
+        )
+
+# функция для проверки нахождения точки в дипазоне
+def check_point_in_limits(point, limits):
+    return (point >= limits[:, 0]) & (point <= limits[:, 1])
+
+# функция для вычисления градиента
+def grad(x, y, z):
+    return np.array([deriv(x, y, z) for deriv in deriv_funcs])
+
+# функция метода градиентного спуска
+# вход - функция градиента, начальная точка поиска, шаг, максимальное число итераций, погрешность поиска
+# выход - точка минимума, число итераций, затраченное время
+def grad_descent(gradient, start, step, eps=1e-05):
+    point = start
+    iter = 0            # текущее число итераций
+    while True:
+        diff = -step * gradient(*point)
+        iter += 1
+        if np.all(np.abs(diff) <= eps):    # критерий останова
+            break
+        point += diff
+        if(not check_point_in_limits(point, limits).all()):   # проверка нахождения точки в диапазоне
+            break
+    return point, iter
+
+# задаём начальную точку поиска - середину каждого диапазона изменения переменных
+start = np.array([sum(var)/2 for var in limits])
+
+print(f'Начальная точка поиска: ({round(start[0],3)}, {round(start[1],3)}, {round(start[2],3)})')
+print(f'Значение функции в начальной точке поиска: {round(func(*start), 3)}')
+time_start = time.perf_counter()      # засекаем время начала поиска
+# вызов метода градиентного спуска
+res, iters = grad_descent(grad, start, 0.001, 50)
+time_fin = time.perf_counter()      # засекаем время окончания поиска
+time_spent = (time_fin - time_start) * 1000   # вычисляем затраченное время
+
+print(f'Точка минимума: ({round(res[0], 3)}, {round(res[1],3)},{round(res[2], 3)})')
+print('Значение функции в точке минимума:', round(func(*res), 3))
+print('Число итераций:', iters)
+print('Время, затраченное на поиск:', round(time_spent, 3), 'мс')
